@@ -44,19 +44,23 @@ module Cenit
               exp: access[:created_at] + access[:token_span],
               iat: access[:created_at],
             }
-          if (scope.email? || scope.profile?) && user.confirmed? #TODO Include other OpenID scopes
-            if user.respond_to?(:email) && (field_value = user.send(:email))
-              payload[:email] = field_value
+          payload_inspector = Proc.new do |property, key|
+            key ||= property
+            if user.respond_to?(property) && (field_value = user.send(property))
+              payload[key] = field_value
             end
-            #TODO Family Name for Cenit Users
-            # payload[:family_name] = user.family_name
-            [
-              :given_name
-            ].each do |field|
-              if user.respond_to?(field) && (field_value = user.send(field))
-                payload[field] = field_value
-              end
-            end if scope.profile?
+          end
+          if (scope.email? || scope.profile?) && user.confirmed? #TODO Include other OpenID scopes
+            payload_inspector.call(:email)
+            if scope.profile?
+              [
+                :name,
+                :given_name,
+                :family_name,
+                :middle_name
+              ].each { |property| payload_inspector.call(property) }
+              payload_inspector.call(:picture_url, :picture)
+            end
           end
           access[:id_token] = JWT.encode(payload, nil, 'none')
         end

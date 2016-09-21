@@ -1,6 +1,6 @@
 class User
   include Mongoid::Document
-  Cenit::MultiTenancy::UserScope
+  include Cenit::MultiTenancy::UserScope
   include Mongoid::Attributes::Dynamic
 
   def confirmed?
