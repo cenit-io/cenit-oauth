@@ -3,6 +3,8 @@ module Cenit
     module AppConfig
       extend ActiveSupport::Concern
 
+      BANED_PARAMETER_NAMES = %w(authentication_method logo redirect_uris)
+
       included do
 
         Cenit::Oauth.app_model self
@@ -37,13 +39,16 @@ module Cenit
 
         after_destroy { application_id && application_id.destroy }
 
-        delegate :registered, to: :application_id
       end
 
       def validates_configuration
         JSON::Validator.fully_validate(configuration_schema, configuration_attributes, errors_as_objects: true).collect do |error|
           error[:message]
         end
+      end
+
+      def registered
+        application_id && application_id.registered
       end
 
       def registered?
@@ -76,17 +81,18 @@ module Cenit
               logo: {
                 type: 'string',
                 group: 'UI'
+              },
+              redirect_uris: {
+                type: 'array',
+                items: {
+                  type: 'string'
+                },
+                visible: registered?
               }
             },
             required: required = %w(authentication_method)
           }
         if registered?
-          properties[:redirect_uris] = {
-            type: 'array',
-            items: {
-              type: 'string'
-            }
-          }
           required << 'redirect_uris'
         end
         application_parameters.each { |p| properties[p.name] = p.schema }

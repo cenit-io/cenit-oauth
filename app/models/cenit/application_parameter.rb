@@ -14,6 +14,7 @@ module Cenit
     validate do
       self.group = nil if group.blank?
       self.description = nil if description.blank?
+      errors.add(:name, 'is not allowed') if Cenit::Oauth::AppConfig::BANED_PARAMETER_NAMES.include?(name)
       errors.blank?
     end
 
