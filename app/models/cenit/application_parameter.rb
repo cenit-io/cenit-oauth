@@ -22,8 +22,18 @@ module Cenit
       group.to_s
     end
 
+    BASIC_TYPES =
+      {
+        integer: 'integer',
+        number: 'number',
+        boolean: 'boolean',
+        string: 'string',
+        object: 'object',
+        json: { oneOf: [{ type: 'object' }, { type: 'array' }] }
+      }.deep_stringify_keys
+
     def type_enum
-      %w(integer number boolean string object) + Cenit::Oauth.app_model.additional_parameter_types
+      BASIC_TYPES.keys.to_a + Cenit::Oauth.app_model.additional_parameter_types
     end
 
     def group_enum
@@ -34,15 +44,13 @@ module Cenit
       sch =
         if type.blank?
           {}
-        elsif %w(integer number boolean string object).include?(type)
-          {
-            type: type
-          }
+        elsif (json_type = BASIC_TYPES[type])
+          json_type.is_a?(Hash) ? json_type : { type: json_type }
         else
           Cenit::Oauth.app_model.parameter_type_schema(type)
         end
       sch = (many ? { type: 'array', items: sch } : sch)
-      sch[:referenced] = true unless %w(integer number boolean string object).include?(type)
+      sch[:referenced] = true unless BASIC_TYPES.has_key?(type) || type.blank?
       sch[:group] = group if group
       sch[:description] = description if description.present?
       sch.deep_stringify_keys
