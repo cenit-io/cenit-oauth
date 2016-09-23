@@ -22,7 +22,7 @@ module Cenit
           self.secret_token ||= Cenit::Token.friendly(60)
 
           if new_record?
-            configuration['authentication_method'] = 'User credentials'
+            configuration['authentication_method'] ||= 'User credentials'
             configuration['logo'] = Identicon.data_url_for identifier
           end
 
