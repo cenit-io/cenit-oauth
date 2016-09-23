@@ -87,14 +87,12 @@ module Cenit
                 items: {
                   type: 'string'
                 },
-                visible: registered?
+                group: 'OAuth'
               }
             },
             required: required = %w(authentication_method)
           }
-        if registered?
-          required << 'redirect_uris'
-        end
+        required << 'redirect_uris' if registered?
         application_parameters.each { |p| properties[p.name] = p.schema }
         schema.deep_stringify_keys
       end
