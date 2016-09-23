@@ -33,7 +33,7 @@ module Cenit
     end
 
     def app
-      @app ||= Cenit::Oauth.app_model.with_current_tenant.where(application_id: self).first
+      @app ||= Cenit::Oauth.app_model.with(tenant).where(application_id: self).first
     end
 
     def name
