@@ -1,3 +1,5 @@
+require 'identicon'
+
 module Cenit
   module Oauth
     module User
@@ -5,8 +7,8 @@ module Cenit
 
       include Cenit::MultiTenancy::UserScope
 
-      def identicon_value
-        try(:id)
+      def avatar_id
+        try(:email) || try(:id)
       end
 
       def confirmed?
@@ -18,10 +20,10 @@ module Cenit
       end
 
       def gravatar()
-        gravatar_check = "//gravatar.com/avatar/#{Digest::MD5.hexdigest(identicon_value.to_s.downcase)}.png?d=404"
+        gravatar_check = "//gravatar.com/avatar/#{Digest::MD5.hexdigest(avatar_id.to_s.downcase)}.png?d=404"
         uri = URI.parse(gravatar_check)
         http = Net::HTTP.new(uri.host, uri.port)
-        request = Net::HTTP::Get.new("/avatar/#{Digest::MD5.hexdigest(identicon_value.to_s.downcase)}.png?d=404")
+        request = Net::HTTP::Get.new("/avatar/#{Digest::MD5.hexdigest(avatar_id.to_s.downcase)}.png?d=404")
         response = http.request(request)
         response.code.to_i < 400 # from d=404 parameter
       rescue
@@ -29,12 +31,12 @@ module Cenit
       end
 
       def identicon(size=50)
-        Identicon.data_url_for identicon_value.to_s.downcase, size
+        Identicon.data_url_for avatar_id.to_s.downcase, size
       end
 
       def gravatar_or_identicon_url(size=50)
         if gravatar()
-          "//gravatar.com/avatar/#{Digest::MD5.hexdigest identicon_value.to_s}?s=#{size}"
+          "//gravatar.com/avatar/#{Digest::MD5.hexdigest avatar_id.to_s}?s=#{size}"
         else
           identicon size
         end

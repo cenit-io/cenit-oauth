@@ -8,13 +8,13 @@ module Cenit
 
     class << self
 
-      def picture_url(&block)
+      def custom_picture_url(&block)
         fail ArgumentError unless block.arity == 1
-        @picture_url_proc = block
+        @custom_picture_url_proc = block
       end
 
       def picture_url_for(user)
-        @picture_url_proc && @picture_url_proc.call(user)
+        @custom_picture_url_proc && @custom_picture_url_proc.call(user)
       end
 
       %w(app auth).each do |prefix|
