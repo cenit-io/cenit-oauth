@@ -1,6 +1,7 @@
 require 'cenit/oauth/engine'
 require 'cenit/oauth/app_config'
 require 'cenit/oauth/user'
+require 'cenit/oauth/tenant'
 
 module Cenit
   module Oauth
