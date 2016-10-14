@@ -59,6 +59,10 @@ module Cenit
         application_id && application_id.identifier
       end
 
+      def slug_id
+        application_id && (application_id.slug.presence || application_id.identifier)
+      end
+
       def configuration
         configuration_attributes
       end

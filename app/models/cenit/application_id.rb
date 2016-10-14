@@ -7,9 +7,12 @@ module Cenit
 
     field :identifier, type: String
     field :oauth_name, type: String
+    field :slug, type: String
 
+    validates_length_of :oauth_name, :slug, within: 6..20, allow_blank: true
+    validates_format_of :slug, with: /\A([a-z](_|-)?)*\Z/
     validates_uniqueness_of :oauth_name, conditions: -> { all.and(:oauth_name.exists => true) }
-    validates_length_of :oauth_name, within: 6..20, allow_blank: true
+    validates_uniqueness_of :slug, conditions: -> { all.and(:slug.exists => true) }
 
     before_save do
       self.tenant = Cenit::MultiTenancy.tenant_model.current_tenant
@@ -67,7 +70,7 @@ module Cenit
     end
 
     def regist_with(data)
-      [:oauth_name, :redirect_uris].each { |field| send("#{field}=", data[field]) }
+      [:slug, :oauth_name, :redirect_uris].each { |field| send("#{field}=", data[field]) }
       self
     end
   end
