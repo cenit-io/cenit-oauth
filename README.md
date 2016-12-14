@@ -27,7 +27,7 @@ If you do that them you may wish to set `oauth_token_end_point` option to an oth
 
 ## Contributing
 
-1. Fork it ( https://github.com/[my-github-username]/cenit-service/fork )
+1. Fork it ( https://github.com/cenit-io/cenit-oauth/fork )
 2. Create your feature branch (`git checkout -b my-new-feature`)
 3. Commit your changes (`git commit -am 'Add some feature'`)
 4. Push to the branch (`git push origin my-new-feature`)
