@@ -23,6 +23,9 @@ module Cenit
 
           if new_record?
             configuration['authentication_method'] ||= 'User credentials'
+          end
+
+          if configuration['logo'].blank?
             configuration['logo'] = Identicon.data_url_for identifier
           end
 
