@@ -6,6 +6,8 @@ class User
   field :email, type: String
   field :picture
 
+  has_many :accounts, class_name: Account.to_s, inverse_of: :owner
+
   def confirmed?
     attributes[:confirmed_at].present?
   end
