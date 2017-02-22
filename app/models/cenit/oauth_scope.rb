@@ -10,60 +10,37 @@ module Cenit
         openid, scope = split(scope, %w(openid email profile address phone offline_access auth))
         @offline_access ||= openid.delete(:offline_access)
         @auth ||= openid.delete(:auth)
-        if openid.present? && !openid.include?(:openid)
-          openid.clear
-          fail
-        end
         @openid.merge(openid)
-        methods, scope = split(scope, %w(get post put delete))
-        fail unless methods.present?
-        methods = Set.new(methods)
-        access = @access[methods] || {}
         if scope.present?
-          ns_begin, ns_end, next_idx =
-            if scope.start_with?((c = "'")) || scope.start_with?((c = '"'))
-              [1, (next_idx = scope.index(c, 1)) - 1, next_idx + 1]
-            else
-              quad_dot_index = scope.index('::')
-              space_index = scope.index(' ')
-              if quad_dot_index && (space_index.nil? || space_index > quad_dot_index)
-                [0, quad_dot_index - 1, quad_dot_index]
-              elsif quad_dot_index.nil? && space_index
-                [0, space_index - 1, space_index + 1]
-              elsif quad_dot_index.nil? && space_index.nil?
-                [0, scope.length, scope.length]
-              else
-                fail
+          methods, scope = split(scope, %w(get post put delete))
+          methods = Set.new(methods)
+          access = @access.delete(methods) || []
+          criteria = {}
+          if scope.present? && scope.start_with?('{')
+            i = 1
+            stack = 1
+            while stack > 0 && i < scope.length
+              case scope[i]
+              when '{'
+                stack += 1
+              when '}'
+                stack -= 1
               end
+              i += 1
             end
-          if ns_end >= ns_begin
-            ns = scope[ns_begin..ns_end]
-            access[ns] ||= Set.new
-            scope = scope.from(next_idx) || ''
-            if scope.start_with?('::')
-              scope = scope.from(2)
-              if scope.start_with?((c = "'")) || scope.start_with?((c = '"'))
-                model = scope[1, scope.index(c, 1) - 1]
-                scope = scope.from(model.length + 2)
-                fail if scope.present? && !scope.start_with?(' ')
-              else
-                model = scope[0..(scope.index(' ') || scope.length) - 1]
-                scope = scope.from(model.length)
-              end
-              access[ns] << model
-            end
-          else
-            fail
+            criteria = JSON.parse(scope[0, i])
+            scope = scope.from(i)
           end
-          access[ns]
-        end
-        if access.present?
-          @access[methods] = access unless @access.has_key?(methods)
-        else
-          @super_methods.merge(methods)
+          if criteria.present?
+            access << criteria
+            @access[methods] = access
+          else
+            @super_methods.merge(methods)
+          end
         end
         scope = scope.strip
       end
+      @openid.clear if @openid.present? && !@openid.include?(:openid)
     rescue
       @access.clear
     end
@@ -73,43 +50,43 @@ module Cenit
     end
 
     def to_s
-      s =
-        (auth? ? 'auth ' : '') +
-          (offline_access? ? 'offline_access ' : '') +
-          (openid? ? openid.to_a.join(' ') + ' ' : '') +
-          access.collect do |methods, accss|
-            methods.to_a.join(' ') +
-              if accss.present?
-                ' ' + accss.collect do |ns, data_types|
-                  ns = space(ns)
-                  if data_types.blank?
-                    ns
-                  else
-                    data_types.collect { |model| "#{ns}::#{space(model)}" }.join(' ')
-                  end
+      if valid?
+        s =
+          (auth? ? 'auth ' : '') +
+            (offline_access? ? 'offline_access ' : '') +
+            (openid? ? openid.to_a.join(' ') + ' ' : '') +
+            access.collect do |methods, access|
+              methods_str = methods.to_a.join(' ')
+              if access.present?
+                access.collect do |criteria|
+                  "#{methods_str} #{criteria.to_json}"
                 end.join(' ')
               else
-                ''
+                methods_str
               end
-          end.join(' ') + ' ' + super_methods.to_a.join(' ')
-      s.strip
+            end.join(' ') + ' ' + super_methods.to_a.join(' ')
+        s.strip
+      else
+        '<invalid scope>'
+      end
     end
 
     def descriptions
       d = []
-      d << 'View your email' if email?
-      d << 'View your basic profile' if profile?
-      access.each do |methods, accss|
-        accss.each do |ns, data_types|
-          ns = space(ns)
-          d << methods.to_a.to_sentence +
-            ' records from data type' +
-            (data_types.size == 1 ? ' ' : 's ') +
-            data_types.collect { |model| "#{ns}::#{space(model)}" }.to_sentence
+      if valid?
+        d << 'View your email' if email?
+        d << 'View your basic profile' if profile?
+        access.each do |methods, access|
+          access.each do |criteria|
+            d << methods.to_a.to_sentence +
+              ' records from data types where ' + criteria.to_json
+          end
         end
-      end
-      if super_methods.present?
-        d << "#{super_methods.to_a.to_sentence} records from any data type"
+        if super_methods.present?
+          d << "#{super_methods.to_a.to_sentence} records from any data type"
+        end
+      else
+        d << '<invalid scope>'
       end
       d
     end
@@ -164,7 +141,7 @@ module Cenit
       counters = Hash.new { |h, k| h[k] = 0 }
       while (method = tokens.detect { |m| scope.start_with?("#{m} ") })
         counters[method] += 1
-        scope = scope.from(method.length).strip + ' '
+        scope = scope.from(method.length).strip
       end
       if counters.values.all? { |v| v ==1 }
         [counters.keys.collect(&:to_sym), scope]
@@ -173,20 +150,10 @@ module Cenit
       end
     end
 
-    def merge_access(other_methods, other_accss)
+    def merge_access(other_methods, other_access)
       other_methods = other_methods - super_methods
       if other_methods.present?
-        other_accss.each do |other_ns, other_data_types|
-          if (data_types = access[other_ns]).present?
-            if other_data_types.present?
-              data_types.merge(other_data_types)
-            else
-              data_types.clear
-            end
-          else
-            access[other_methods] = other_accss.deep_dup
-          end
-        end
+        (access[other_methods] ||= []).concat(other_access).uniq!
       end
     end
   end

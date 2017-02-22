@@ -10,8 +10,9 @@ module Cenit
 
     class << self
       def for(app_id, scope, user_or_id, tenant = Cenit::MultiTenancy.tenant_model.current)
+        user_model = Cenit::MultiTenancy.user_model
         user =
-          if (user_model = Cenit::MultiTenancy.user_model) && user_or_id.is_a?(user_model)
+          if user_model && user_or_id.is_a?(user_model)
             user_or_id
           else
             (user_model && user_model.where(id: user_or_id).first) || user_or_id
@@ -20,7 +21,7 @@ module Cenit
         unless (access_grant = Cenit::OauthAccessGrant.with(tenant).where(application_id: app_id).first)
           access_grant = Cenit::OauthAccessGrant.with(tenant).new(application_id: app_id)
         end
-        access_grant.scope = scope.to_s
+        access_grant.scope = Cenit::OauthScope.new(access_grant.scope).merge(scope).to_s
         access_grant.save
         token = create(tenant: tenant, application_id: app_id, user_id: user.id)
         access =
