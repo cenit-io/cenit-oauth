@@ -94,7 +94,8 @@ module Cenit
                 items: {
                   type: 'string'
                 },
-                group: 'OAuth'
+                group: 'OAuth',
+                default: ["#{Cenit.homepage}#{Cenit.oauth_path}/callback"]
               }
             },
             required: required = %w(authentication_method)
