@@ -6,8 +6,10 @@ module Cenit
       @access = {}
       @super_methods = Set.new
       scope = scope.to_s.strip
+      openid_expected = false
       while scope.present?
         openid, scope = split(scope, %w(openid email profile address phone offline_access auth))
+        fail if openid.empty? && openid_expected
         @offline_access ||= openid.delete(:offline_access)
         @auth ||= openid.delete(:auth)
         @openid.merge(openid)
@@ -17,6 +19,7 @@ module Cenit
           access = @access.delete(methods) || []
           criteria = {}
           if scope.present? && scope.start_with?('{')
+            openid_expected = false
             i = 1
             stack = 1
             while stack > 0 && i < scope.length
@@ -30,6 +33,8 @@ module Cenit
             end
             criteria = JSON.parse(scope[0, i])
             scope = scope.from(i)
+          else
+            openid_expected = true
           end
           if criteria.present?
             access << criteria
