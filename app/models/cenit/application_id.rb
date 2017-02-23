@@ -9,7 +9,11 @@ module Cenit
     field :oauth_name, type: String
     field :slug, type: String
 
-    validates_length_of :oauth_name, :slug, within: 6..20, allow_blank: true
+    before_validation do
+      self.oauth_name = nil if oauth_name.blank?
+    end
+
+    validates_length_of :oauth_name, :slug, within: 6..20, allow_nil: true
     validates_format_of :slug, with: /\A([a-z](_|-)?)*\Z/
     validates_uniqueness_of :oauth_name, conditions: -> { all.and(:oauth_name.exists => true) }
     validates_uniqueness_of :slug, conditions: -> { all.and(:slug.exists => true) }
@@ -42,7 +46,7 @@ module Cenit
     end
 
     def name
-      oauth_name || (app && app.oauth_name)
+      oauth_name.presence || (app && app.oauth_name)
     end
 
     def redirect_uris
