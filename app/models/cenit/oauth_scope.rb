@@ -16,7 +16,7 @@ module Cenit
         if scope.present?
           methods, scope = split(scope, %w(get post put delete))
           methods = Set.new(methods)
-          access = @access.delete(methods) || []
+          criterion = @access.delete(methods) || []
           criteria = {}
           if scope.present? && scope.start_with?('{')
             openid_expected = false
@@ -37,39 +37,69 @@ module Cenit
             openid_expected = true
           end
           if criteria.present?
-            access << criteria
-            @access[methods] = access
+            criterion << criteria
+            @access[methods] = criterion
           else
             @super_methods.merge(methods)
           end
         end
         scope = scope.strip
       end
-      @openid.clear if @openid.present? && !@openid.include?(:openid)
+      fail if @openid.present? && !@openid.include?(:openid)
+      normalized_access = {}
+      @access.each do |methods, criterion|
+        methods.each do |method|
+          next if super_methods.include?(method)
+          if (normalized_criteria = normalized_access[method])
+            normalized_criteria.concat(criterion)
+          else
+            normalized_access[method] = criterion
+          end
+        end
+      end
+      @access = normalized_access
     rescue
+      @openid.clear
       @access.clear
+      @super_methods.clear
+    end
+
+    def criteria_for(method)
+      return unless (criterion = access[method])
+      if criterion.size == 1
+        criterion[0]
+      else
+        { '$or' => criterion }
+      end
+    end
+
+    def each_criteria
+      access.each_key { |method| yield(method, criteria_for(method)) }
+    end
+
+    def access_by_ids
+      scope = clone
+      scope.each_criteria do |method, criteria|
+        unless criteria.size == 1 && (id_cond = criteria['_id']).is_a?(Hash) &&
+          id_cond.size == 1 && id_cond['$in'].is_a?(Array)
+          ids = Setup::DataType.where(criteria).collect(&:id).collect(&:to_s)
+          scope.instance_variable_get(:@access)[method] = [{ '_id' => { '$in' => ids } }]
+        end
+      end
+      scope
     end
 
     def valid?
-      openid.present? || access.present?
+      openid.present? || access.present? || super_methods.present?
     end
 
     def to_s
       if valid?
-        s =
-          (auth? ? 'auth ' : '') +
-            (offline_access? ? 'offline_access ' : '') +
-            (openid? ? openid.to_a.join(' ') + ' ' : '') +
-            access.collect do |methods, access|
-              methods_str = methods.to_a.join(' ')
-              if access.present?
-                access.collect do |criteria|
-                  "#{methods_str} #{criteria.to_json}"
-                end.join(' ')
-              else
-                methods_str
-              end
-            end.join(' ') + ' ' + super_methods.to_a.join(' ')
+        s = access_less_scope
+        each_criteria do |method, criteria|
+          s += " #{method} #{criteria.to_json}"
+        end
+        s += ' ' + super_methods.to_a.join(' ')
         s.strip
       else
         '<invalid scope>'
@@ -81,11 +111,8 @@ module Cenit
       if valid?
         d << 'View your email' if email?
         d << 'View your basic profile' if profile?
-        access.each do |methods, access|
-          access.each do |criteria|
-            d << methods.to_a.to_sentence +
-              ' records from data types where ' + criteria.to_json
-          end
+        each_criteria do |method, criteria|
+          d << "#{method} records from data types where #{criteria.to_json}"
         end
         if super_methods.present?
           d << "#{super_methods.to_a.to_sentence} records from any data type"
@@ -116,26 +143,88 @@ module Cenit
       offline_access.present?
     end
 
-    def merge(other)
+    def clone
+      merge('')
+    end
+
+    def merge(other_scope)
+      other_scope = self.class.new(other_scope.to_s) unless other_scope.is_a?(self.class)
       merge = self.class.new
-      merge.instance_variable_set(:@auth, auth || other.instance_variable_get(:@auth))
-      merge.instance_variable_set(:@offline_access, offline_access || other.instance_variable_get(:@offline_access))
-      merge.instance_variable_set(:@openid, (openid + other.instance_variable_get(:@openid)))
-      merge.instance_variable_set(:@super_methods, super_methods + other.super_methods)
+      merge.instance_variable_set(:@auth, auth || other_scope.instance_variable_get(:@auth))
+      merge.instance_variable_set(:@offline_access, offline_access || other_scope.instance_variable_get(:@offline_access))
+      merge.instance_variable_set(:@openid, (openid + other_scope.instance_variable_get(:@openid)))
+      merge.instance_variable_set(:@super_methods, super_methods + other_scope.super_methods)
       [
         access,
-        other.instance_variable_get(:@access)
+        other_scope.instance_variable_get(:@access)
       ].each do |access|
-        access.each do |methods, other_accss|
-          merge.merge_access(methods, other_accss)
+        access.each do |method, other_criterion|
+          merge.merge_access(method, other_criterion)
         end
       end
       merge
     end
 
+    def >(other_scope)
+      other_scope = Cenit::OauthScope.new(other_scope.to_s) unless other_scope.is_a?(Cenit::OauthScope)
+      return false if (other_scope.auth? && !auth?) ||
+        (other_scope.offline_access? && !offline_access?) ||
+        !other_scope.openid_set.subset?(openid_set) ||
+        !other_scope.super_methods_set.subset?(super_methods_set)
+      other_scope.each_criteria { |method, _| return false unless criteria_for(method) }
+      access_by_ids.each_criteria do |method, criteria|
+        next unless (other_criteria = other_scope.criteria_for(method))
+        criteria = { '$and' => [other_criteria, '_id' => { '$nin' => criteria['_id']['$in'] }] }
+        return false if Setup::DataType.where(criteria).exists?
+      end
+      true
+    end
+
+    def diff(other_scope)
+      other_scope = self.class.new(other_scope.to_s) unless other_scope.is_a?(self.class)
+      diff = self.class.new
+      if auth? && !other_scope.auth?
+        diff.instance_variable_set(:@auth, true)
+      end
+      if offline_access? && !other_scope.offline_access?
+        diff.instance_variable_set(:@offline_access, true)
+      end
+      if (openid = self.openid - other_scope.instance_variable_get(:@openid)).present?
+        openid << :openid
+        diff.instance_variable_set(:@openid, openid)
+      end
+      if (super_methods = self.super_methods - other_scope.instance_variable_get(:@super_methods)).present?
+        diff.instance_variable_set(:@super_methods, super_methods)
+      end
+      other_scope = other_scope.access_by_ids
+      diff_access = diff.instance_variable_get(:@access)
+      each_criteria do |method, criteria|
+        diff_access[method] = [
+          if (other_criteria = other_scope.criteria_for(method))
+            { '$and' => [criteria, '_id' => { '$nin' => other_criteria['_id']['$in'] }] }
+          else
+            criteria
+          end
+        ]
+      end
+      diff
+    end
+
+    def openid_set
+      openid.dup
+    end
+
+    def super_method?(method)
+      super_methods.include?(method)
+    end
+
+    def super_methods_set
+      super_methods.dup
+    end
+
     protected
 
-    attr_reader :auth, :offline_access, :openid, :methods, :nss, :data_types, :access, :super_methods
+    attr_reader :auth, :offline_access, :openid, :access, :super_methods
 
     def space(str)
       str.index(' ') ? "'#{str}'" : str
@@ -146,8 +235,9 @@ module Cenit
       counters = Hash.new { |h, k| h[k] = 0 }
       while (method = tokens.detect { |m| scope.start_with?("#{m} ") })
         counters[method] += 1
-        scope = scope.from(method.length).strip
+        scope = scope.from(method.length).strip + ' '
       end
+      scope = scope.strip
       if counters.values.all? { |v| v ==1 }
         [counters.keys.collect(&:to_sym), scope]
       else
@@ -155,11 +245,15 @@ module Cenit
       end
     end
 
-    def merge_access(other_methods, other_access)
-      other_methods = other_methods - super_methods
-      if other_methods.present?
-        (access[other_methods] ||= []).concat(other_access).uniq!
-      end
+    def merge_access(other_method, other_criterion)
+      return if super_methods.include?(other_method)
+      (access[other_method] ||= []).concat(other_criterion).uniq!
+    end
+
+    def access_less_scope
+      ((auth? ? 'auth ' : '') +
+        (offline_access? ? 'offline_access ' : '') +
+        (openid? ? openid.to_a.join(' ') + ' ' : '')).strip
     end
   end
 end

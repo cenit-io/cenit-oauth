@@ -1,6 +1,9 @@
 require 'jwt'
 
 module Cenit
+  # = OauthAccessToken
+  #
+  # Store token for OAuth 2.0 access.
   class OauthAccessToken < BasicToken
     include OauthGrantToken
 
@@ -43,15 +46,16 @@ module Cenit
               sub: user.id.to_s,
               aud: app_id.identifier,
               exp: access[:created_at] + access[:token_span],
-              iat: access[:created_at],
+              iat: access[:created_at]
             }
-          payload_inspector = Proc.new do |property, key|
+          payload_inspector = proc do |property, key|
             key ||= property
             if user.respond_to?(property) && (field_value = user.send(property))
               payload[key] = field_value
             end
           end
-          if (scope.email? || scope.profile?) && user.confirmed? #TODO Include other OpenID scopes
+          # TODO: Include other OpenID scopes
+          if (scope.email? || scope.profile?) && user.confirmed?
             payload_inspector.call(:email)
             if scope.profile?
               [
