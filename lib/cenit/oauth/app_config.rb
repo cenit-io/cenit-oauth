@@ -18,7 +18,7 @@ module Cenit
         field :configuration_attributes, type: Hash, default: {}
 
         before_save do
-          self.application_id ||= ApplicationId.create
+          self.application_id ||= ApplicationId.new
           self.secret_token ||= Cenit::Token.friendly(60)
 
           if new_record?
@@ -39,6 +39,8 @@ module Cenit
 
           errors.blank?
         end
+
+        after_save { application_id.save if application_id.new_record? }
 
         after_destroy { application_id && application_id.destroy }
 
