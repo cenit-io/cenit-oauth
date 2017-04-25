@@ -15,8 +15,8 @@ module Cenit
 
     validates_length_of :oauth_name, :slug, within: 6..20, allow_nil: true
     validates_format_of :slug, with: /\A([a-z](_|-)?)*\Z/
-    validates_uniqueness_of :oauth_name, conditions: -> { where(:oauth_name.ne => nil) }
-    validates_uniqueness_of :slug, conditions: -> { all.and(:slug.exists => true) }
+    #validates_uniqueness_of :oauth_name, conditions: -> { where(:oauth_name.ne => nil) }
+    #validates_uniqueness_of :slug, conditions: -> { all.and(:slug.exists => true) }
 
     before_save do
       self.tenant = Cenit::MultiTenancy.tenant_model.current_tenant
