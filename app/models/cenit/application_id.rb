@@ -9,7 +9,8 @@ module Cenit
     field :oauth_name, type: String
     field :slug, type: String, default: ''
 
-    validates_length_of :oauth_name, :slug, within: 6..20, allow_nil: true
+    validates_length_of :oauth_name, within: 6..20, allow_nil: true
+    validates_length_of :slug, maximum: 255
     validates_format_of :slug, with: /\A([a-z](_|-)?)*\Z/
 
     before_save do
