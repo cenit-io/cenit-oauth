@@ -7,18 +7,20 @@ module Cenit
 
     field :identifier, type: String
     field :oauth_name, type: String
-    field :slug, type: String
-
-    before_validation do
-      self.oauth_name = nil if oauth_name.blank?
-    end
+    field :slug, type: String, default: ''
 
     validates_length_of :oauth_name, :slug, within: 6..20, allow_nil: true
     validates_format_of :slug, with: /\A([a-z](_|-)?)*\Z/
-    #validates_uniqueness_of :oauth_name, conditions: -> { where(:oauth_name.ne => nil) }
-    #validates_uniqueness_of :slug, conditions: -> { all.and(:slug.exists => true) }
 
     before_save do
+      [:oauth_name, :slug].each do |field|
+        if self[field].blank?
+          remove_attribute(field)
+        else
+          self[field] = self[field].strip
+          errors.add(field, 'is already taken') if self.class.where(field => self[field]).exists?
+        end
+      end
       self.tenant = Cenit::MultiTenancy.tenant_model.current_tenant
       self.identifier ||= (id.to_s + Token.friendly(60))
       if @redirect_uris
