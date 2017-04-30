@@ -22,7 +22,7 @@ module Cenit
           errors.add(field, 'is already taken') if self.class.where(field => self[field]).exists?
         end
       end
-      self.tenant = Cenit::MultiTenancy.tenant_model.current_tenant
+      self.tenant ||= Cenit::MultiTenancy.tenant_model.current_tenant
       self.identifier ||= (id.to_s + Token.friendly(60))
       if @redirect_uris
         app.configuration['redirect_uris'] = @redirect_uris
