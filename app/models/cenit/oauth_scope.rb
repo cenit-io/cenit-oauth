@@ -1,6 +1,32 @@
 module Cenit
   class OauthScope
 
+    AUTH_TOKEN = :auth
+
+    OFFLINE_ACCESS_TOKEN = :offline_access
+
+    OPENID_TOKEN = :openid
+
+    OPENID_EMAIL_TOKEN = :email
+
+    OPENID_PROFILE_TOKEN = :profile
+
+    OPENID_TOKENS = [OPENID_TOKEN, OPENID_EMAIL_TOKEN, OPENID_PROFILE_TOKEN].freeze
+
+    CREATE_TOKEN = :create
+
+    READ_TOKEN = :read
+
+    UPDATE_TOKEN = :update
+
+    DELETE_TOKEN = :delete
+
+    ACCESS_TOKENS = [CREATE_TOKEN, READ_TOKEN, UPDATE_TOKEN, DELETE_TOKEN].freeze
+
+    TOKENS = ([AUTH_TOKEN, OFFLINE_ACCESS_TOKEN] + OPENID_TOKENS + ACCESS_TOKENS).freeze
+
+    NON_ACCESS_TOKENS = ([AUTH_TOKEN, OFFLINE_ACCESS_TOKEN] + OPENID_TOKENS).freeze
+
     def initialize(scope = '')
       @openid = Set.new
       @access = {}
@@ -8,13 +34,13 @@ module Cenit
       scope = scope.to_s.strip
       openid_expected = false
       while scope.present?
-        openid, scope = split(scope, %w(openid email profile address phone offline_access auth))
+        openid, scope = split(scope, NON_ACCESS_TOKENS)
         fail if openid.empty? && openid_expected
-        @offline_access ||= openid.delete(:offline_access)
-        @auth ||= openid.delete(:auth)
+        @offline_access ||= openid.delete(OFFLINE_ACCESS_TOKEN)
+        @auth ||= openid.delete(AUTH_TOKEN)
         @openid.merge(openid)
         if scope.present?
-          methods, scope = split(scope, %w(get post put delete))
+          methods, scope = split(scope, ACCESS_TOKENS)
           methods = Set.new(methods)
           criterion = @access.delete(methods) || []
           criteria = {}
@@ -45,7 +71,7 @@ module Cenit
         end
         scope = scope.strip
       end
-      fail if @openid.present? && !@openid.include?(:openid)
+      fail if @openid.present? && !@openid.include?(OPENID_TOKEN)
       normalized_access = {}
       @access.each do |methods, criterion|
         methods.each do |method|
@@ -90,7 +116,7 @@ module Cenit
     end
 
     def valid?
-      openid.present? || access.present? || super_methods.present?
+      auth? || offline_access? || openid.present? || access.present? || super_methods.present?
     end
 
     def to_s
@@ -128,15 +154,15 @@ module Cenit
     end
 
     def openid?
-      openid.include?(:openid)
+      openid.include?(OPENID_TOKEN)
     end
 
     def email?
-      openid.include?(:email)
+      openid.include?(OPENID_EMAIL_TOKEN)
     end
 
     def profile?
-      openid.include?(:profile)
+      openid.include?(OPENID_PROFILE_TOKEN)
     end
 
     def offline_access?
@@ -190,7 +216,7 @@ module Cenit
         diff.instance_variable_set(:@offline_access, true)
       end
       if (openid = self.openid - other_scope.instance_variable_get(:@openid)).present?
-        openid << :openid
+        openid << OPENID_TOKEN
         diff.instance_variable_set(:@openid, openid)
       end
       if (super_methods = self.super_methods - other_scope.instance_variable_get(:@super_methods)).present?
@@ -251,8 +277,8 @@ module Cenit
     end
 
     def access_less_scope
-      ((auth? ? 'auth ' : '') +
-        (offline_access? ? 'offline_access ' : '') +
+      ((auth? ? "#{AUTH_TOKEN} " : '') +
+        (offline_access? ? "#{OFFLINE_ACCESS_TOKEN} " : '') +
         (openid? ? openid.to_a.join(' ') + ' ' : '')).strip
     end
   end
