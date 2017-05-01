@@ -6,6 +6,8 @@ module Cenit
     belongs_to :application_id, class_name: Cenit::ApplicationId.to_s, inverse_of: nil
     field :scope, type: String
 
+    attr_readonly :application_id_id
+
     before_save :validate_scope
 
     after_destroy :clear_oauth_tokens
