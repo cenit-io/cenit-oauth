@@ -3,7 +3,7 @@ module Cenit
     include Mongoid::Document
     include Mongoid::Timestamps
 
-    belongs_to :tenant, class_name: Cenit::MultiTenancy.tenant_model_name, inverse_of: nil
+    field :tenant_id
 
     field :identifier, type: String
     field :oauth_name, type: String
@@ -42,9 +42,18 @@ module Cenit
       end
     end
 
+    def tenant
+      @tenant ||= Cenit::MultiTenancy.tenant_model.unscoped.where(id: tenant_id).first
+    end
+
+    def tenant=(tenant)
+      self.tenant_id = (@tenant = tenant) ? tenant.id : nil
+      tenant
+    end
+
     def app
-      @app ||= tenant && Cenit::Oauth.app_model.with(tenant) do |app_model|
-        app_model.where(application_id: self).first
+      @app ||= tenant && tenant.switch do
+        Cenit::Oauth.app_model.where(application_id: self).first
       end
     end
 

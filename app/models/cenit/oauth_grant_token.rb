@@ -9,7 +9,7 @@ module Cenit
     end
 
     def access_grant
-      @access_grant ||= Cenit::OauthAccessGrant.with(tenant).where(application_id: application_id).first
+      @access_grant ||= tenant.switch { Cenit::OauthAccessGrant.where(application_id: application_id).first }
     end
 
     def scope

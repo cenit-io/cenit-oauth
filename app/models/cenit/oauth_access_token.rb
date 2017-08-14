@@ -21,9 +21,8 @@ module Cenit
             (user_model && user_model.where(id: user_or_id).first) || user_or_id
           end
         scope = Cenit::OauthScope.new(scope) unless scope.is_a?(Cenit::OauthScope)
-        unless (access_grant = Cenit::OauthAccessGrant.with(tenant).where(application_id: app_id).first)
-          access_grant = Cenit::OauthAccessGrant.with(tenant).new(application_id: app_id)
-        end
+        access_grant = tenant.switch { Cenit::OauthAccessGrant.where(application_id: app_id).first } ||
+          tenant.switch { Cenit::OauthAccessGrant.new(application_id: app_id) }
         access_grant.scope = Cenit::OauthScope.new(access_grant.scope).merge(scope).to_s
         access_grant.save
         token = create(tenant: tenant, application_id: app_id, user_id: user.id)
