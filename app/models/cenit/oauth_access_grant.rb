@@ -2,6 +2,9 @@ module Cenit
   class OauthAccessGrant
     include Mongoid::Document
     include Cenit::MultiTenancy::Scoped
+    include CrossOrigin::Document
+
+    origins :default, -> { Cenit::MultiTenancy.tenant_model.current && :owner }
 
     belongs_to :application_id, class_name: Cenit::ApplicationId.to_s, inverse_of: nil
     field :scope, type: String
@@ -11,6 +14,12 @@ module Cenit
     before_save :validate_scope
 
     after_destroy :clear_oauth_tokens
+
+    after_save :check_origin
+
+    def check_origin
+      cross(oauth_scope.multi_tenant? ? :owner : :default)
+    end
 
     def validate_scope
       if (scope = oauth_scope.access_by_ids).valid?

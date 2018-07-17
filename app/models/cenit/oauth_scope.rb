@@ -5,6 +5,8 @@ module Cenit
 
     OFFLINE_ACCESS_TOKEN = :offline_access
 
+    MULTI_TENANT_TOKEN = :multi_tenant
+
     OPENID_TOKEN = :openid
 
     OPENID_EMAIL_TOKEN = :email
@@ -23,9 +25,9 @@ module Cenit
 
     ACCESS_TOKENS = [CREATE_TOKEN, READ_TOKEN, UPDATE_TOKEN, DELETE_TOKEN].freeze
 
-    TOKENS = ([AUTH_TOKEN, OFFLINE_ACCESS_TOKEN] + OPENID_TOKENS + ACCESS_TOKENS).freeze
+    TOKENS = ([AUTH_TOKEN, OFFLINE_ACCESS_TOKEN, MULTI_TENANT_TOKEN] + OPENID_TOKENS + ACCESS_TOKENS).freeze
 
-    NON_ACCESS_TOKENS = ([AUTH_TOKEN, OFFLINE_ACCESS_TOKEN] + OPENID_TOKENS).freeze
+    NON_ACCESS_TOKENS = ([AUTH_TOKEN, OFFLINE_ACCESS_TOKEN, MULTI_TENANT_TOKEN] + OPENID_TOKENS).freeze
 
     def initialize(scope = '')
       @openid = Set.new
@@ -38,6 +40,7 @@ module Cenit
         fail if openid.empty? && openid_expected
         @offline_access ||= openid.delete(OFFLINE_ACCESS_TOKEN)
         @auth ||= openid.delete(AUTH_TOKEN)
+        @multi_tenant ||= openid.delete(MULTI_TENANT_TOKEN)
         @openid.merge(openid)
         if scope.present?
           methods, scope = split(scope, ACCESS_TOKENS)
@@ -116,7 +119,7 @@ module Cenit
     end
 
     def valid?
-      auth? || offline_access? || openid.present? || access.present? || super_methods.present?
+      auth? || offline_access? || multi_tenant? || openid.present? || access.present? || super_methods.present?
     end
 
     def to_s
@@ -169,6 +172,10 @@ module Cenit
       offline_access.present?
     end
 
+    def multi_tenant?
+      multi_tenant.present?
+    end
+
     def clone
       merge('')
     end
@@ -178,6 +185,7 @@ module Cenit
       merge = self.class.new
       merge.instance_variable_set(:@auth, auth || other_scope.instance_variable_get(:@auth))
       merge.instance_variable_set(:@offline_access, offline_access || other_scope.instance_variable_get(:@offline_access))
+      merge.instance_variable_set(:@multi_tenant, multi_tenant || other_scope.instance_variable_get(:@multi_tenant))
       merge.instance_variable_set(:@openid, (openid + other_scope.instance_variable_get(:@openid)))
       merge.instance_variable_set(:@super_methods, super_methods + other_scope.super_methods)
       [
@@ -195,6 +203,7 @@ module Cenit
       other_scope = Cenit::OauthScope.new(other_scope.to_s) unless other_scope.is_a?(Cenit::OauthScope)
       return false if (other_scope.auth? && !auth?) ||
         (other_scope.offline_access? && !offline_access?) ||
+        (other_scope.multi_tenant? && !multi_tenant?) ||
         !other_scope.openid_set.subset?(openid_set) ||
         !other_scope.super_methods_set.subset?(super_methods_set)
       other_scope.each_criteria { |method, _| return false unless criteria_for(method) }
@@ -214,6 +223,9 @@ module Cenit
       end
       if offline_access? && !other_scope.offline_access?
         diff.instance_variable_set(:@offline_access, true)
+      end
+      if multi_tenant? && !other_scope.multi_tenant?
+        diff.instance_variable_set(:@multi_tenant, true)
       end
       if (openid = self.openid - other_scope.instance_variable_get(:@openid)).present?
         openid << OPENID_TOKEN
@@ -250,7 +262,7 @@ module Cenit
 
     protected
 
-    attr_reader :auth, :offline_access, :openid, :access, :super_methods
+    attr_reader :auth, :offline_access, :openid, :access, :super_methods, :multi_tenant
 
     def space(str)
       str.index(' ') ? "'#{str}'" : str
@@ -264,7 +276,7 @@ module Cenit
         scope = scope.from(method.length).strip + ' '
       end
       scope = scope.strip
-      if counters.values.all? { |v| v ==1 }
+      if counters.values.all? { |v| v == 1 }
         [counters.keys.collect(&:to_sym), scope]
       else
         [[], scope]
@@ -279,6 +291,7 @@ module Cenit
     def access_less_scope
       ((auth? ? "#{AUTH_TOKEN} " : '') +
         (offline_access? ? "#{OFFLINE_ACCESS_TOKEN} " : '') +
+        (multi_tenant? ? "#{MULTI_TENANT_TOKEN} " : '') +
         (openid? ? openid.to_a.join(' ') + ' ' : '')).strip
     end
   end
