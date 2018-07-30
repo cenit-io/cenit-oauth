@@ -43,6 +43,7 @@ module Cenit
           errors += "Invalid #{grant_type.gsub('_', ' ')}." if token_class
         end
         response = { error: errors } if errors.present?
+        headers['Access-Control-Allow-Origin'] = request.headers['Origin'] || ::Cenit.homepage
         render json: response, status: response_code
       end
     end
