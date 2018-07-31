@@ -54,17 +54,15 @@ module Cenit
             end
           end
           # TODO: Include other OpenID scopes
-          if (scope.email? || scope.profile?) && user.confirmed?
-            payload_inspector.call(:email)
-            if scope.profile?
-              [
-                :name,
-                :given_name,
-                :family_name,
-                :middle_name
-              ].each { |property| payload_inspector.call(property) }
-              payload_inspector.call(:picture_url, :picture)
-            end
+          payload_inspector.call(:email) if scope.email? && user.confirmed?
+          if scope.profile?
+            [
+              :name,
+              :given_name,
+              :family_name,
+              :middle_name
+            ].each { |property| payload_inspector.call(property) }
+            payload_inspector.call(:picture_url, :picture)
           end
           access[:id_token] = JWT.encode(payload, nil, 'none')
         end
