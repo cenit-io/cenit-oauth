@@ -39,7 +39,7 @@ module Cenit
             access_token: token.token,
             token_type: token.token_type,
             created_at: token.created_at.to_i,
-            token_span: token.token_span
+            expires_in: token.token_span
           }
         if scope.offline_access? &&
           Cenit::OauthRefreshToken.where(tenant: tenant, application_id: app_id, user_id: user.id).blank?
@@ -52,7 +52,7 @@ module Cenit
               iss: Cenit.homepage,
               sub: user.id.to_s,
               aud: app_id.identifier,
-              exp: access[:created_at] + access[:token_span],
+              exp: access[:created_at] + access[:expires_in],
               iat: access[:created_at]
             }
           payload_inspector = proc do |property, key|
