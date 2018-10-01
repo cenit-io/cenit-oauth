@@ -11,6 +11,10 @@ module Cenit
 
     validates_inclusion_of :token_type, in: [:Bearer]
 
+    def hit
+      # Nothing here
+    end
+
     def get_tenant
       if access_grant.origin == :owner
         tenant.owner.account
