@@ -1,3 +1,7 @@
+# This project have been discontinued
+
+The OAuth 2.0 controller have been embedded into the cenit core and this logic is no longer needed as a separated gem.
+
 # Cenit OAuth
 
 Engine that provides controllers and models for Cenit OAuth 2.0 protocol
